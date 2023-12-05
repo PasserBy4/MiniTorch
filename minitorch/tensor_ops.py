@@ -1,22 +1,16 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Optional, Type
+from typing import TYPE_CHECKING, Any, Callable, Optional, Type
 
 import numpy as np
 from typing_extensions import Protocol
 
 from . import operators
-from .tensor_data import (
-    MAX_DIMS,
-    broadcast_index,
-    index_to_position,
-    shape_broadcast,
-    to_index,
-)
+from .tensor_data import broadcast_index, index_to_position, shape_broadcast, to_index
 
 if TYPE_CHECKING:
     from .tensor import Tensor
-    from .tensor_data import Index, Shape, Storage, Strides
+    from .tensor_data import Shape, Storage, Strides
 
 
 class MapProto(Protocol):
@@ -230,9 +224,7 @@ class SimpleOps(TensorOps):
 # Implementations.
 
 
-def tensor_map(
-    fn: Callable[[float], float]
-) -> Callable[[Storage, Shape, Strides, Storage, Shape, Strides], None]:
+def tensor_map(fn: Callable[[float], float]) -> Any:
     """
     Low-level implementation of tensor map between
     tensors with *possibly different strides*.
@@ -251,9 +243,15 @@ def tensor_map(
 
     Args:
         fn: function from float-to-float to apply
+        out (array): storage for out tensor
+        out_shape (array): shape for out tensor
+        out_strides (array): strides for out tensor
+        in_storage (array): storage for in tensor
+        in_shape (array): shape for in tensor
+        in_strides (array): strides for in tensor
 
     Returns:
-        Tensor map function.
+        None : Fills in `out`
     """
 
     def _map(
@@ -264,16 +262,18 @@ def tensor_map(
         in_shape: Shape,
         in_strides: Strides,
     ) -> None:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        out_size = np.prod(out_shape)
+        for i in range(out_size):
+            out_index = np.zeros_like(out_shape)
+            to_index(i, out_shape, out_index)
+            in_index = np.zeros_like(in_shape)
+            broadcast_index(out_index, out_shape, in_shape, in_index)
+            out[i] = fn(in_storage[index_to_position(in_index, in_strides)])
 
     return _map
 
 
-def tensor_zip(
-    fn: Callable[[float, float], float]
-) -> Callable[
-    [Storage, Shape, Strides, Storage, Shape, Strides, Storage, Shape, Strides], None
-]:
+def tensor_zip(fn: Callable[[float, float], float]) -> Any:
     """
     Low-level implementation of tensor zip between
     tensors with *possibly different strides*.
@@ -292,9 +292,18 @@ def tensor_zip(
 
     Args:
         fn: function mapping two floats to float to apply
+        out (array): storage for `out` tensor
+        out_shape (array): shape for `out` tensor
+        out_strides (array): strides for `out` tensor
+        a_storage (array): storage for `a` tensor
+        a_shape (array): shape for `a` tensor
+        a_strides (array): strides for `a` tensor
+        b_storage (array): storage for `b` tensor
+        b_shape (array): shape for `b` tensor
+        b_strides (array): strides for `b` tensor
 
     Returns:
-        Tensor zip function.
+        None : Fills in `out`
     """
 
     def _zip(
@@ -308,14 +317,25 @@ def tensor_zip(
         b_shape: Shape,
         b_strides: Strides,
     ) -> None:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        out_size = np.prod(out_shape)
+        for i in range(out_size):
+            out_index = np.zeros(len(out_shape), dtype=np.int32)
+            to_index(i, out_shape, out_index)
+
+            a_index = np.zeros(len(a_shape), dtype=np.int32)
+            broadcast_index(out_index, out_shape, a_shape, a_index)
+
+            b_index = np.zeros(len(b_shape), dtype=np.int32)
+            broadcast_index(out_index, out_shape, b_shape, b_index)
+
+            a_value = a_storage[index_to_position(a_index, a_strides)]
+            b_value = b_storage[index_to_position(b_index, b_strides)]
+            out[i] = fn(a_value, b_value)
 
     return _zip
 
 
-def tensor_reduce(
-    fn: Callable[[float, float], float]
-) -> Callable[[Storage, Shape, Strides, Storage, Shape, Strides, int], None]:
+def tensor_reduce(fn: Callable[[float, float], float]) -> Any:
     """
     Low-level implementation of tensor reduce.
 
@@ -324,9 +344,16 @@ def tensor_reduce(
 
     Args:
         fn: reduction function mapping two floats to float
+        out (array): storage for `out` tensor
+        out_shape (array): shape for `out` tensor
+        out_strides (array): strides for `out` tensor
+        a_storage (array): storage for `a` tensor
+        a_shape (array): shape for `a` tensor
+        a_strides (array): strides for `a` tensor
+        reduce_dim (int): dimension to reduce out
 
     Returns:
-        Tensor reduce function.
+        None : Fills in `out`
     """
 
     def _reduce(
@@ -338,7 +365,24 @@ def tensor_reduce(
         a_strides: Strides,
         reduce_dim: int,
     ) -> None:
-        raise NotImplementedError("Need to include this file from past assignment.")
+        reduced_dim_size = a_shape[reduce_dim]
+        init_value = out[0]
+        out_size = np.prod(out_shape)
+
+        for i in range(out_size):
+            out_index = np.zeros(len(out_shape), dtype=np.int32)
+            to_index(i, out_shape, out_index)
+
+            reduce_result = init_value
+
+            for j in range(reduced_dim_size):
+                a_index = out_index.copy()
+                a_index[reduce_dim] = j
+
+                a_pos = index_to_position(a_index, a_strides)
+                reduce_result = fn(reduce_result, a_storage[a_pos])
+
+            out[i] = reduce_result
 
     return _reduce
 

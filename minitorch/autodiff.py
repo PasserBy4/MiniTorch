@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Tuple
 
 from typing_extensions import Protocol
 
@@ -22,7 +22,14 @@ def central_difference(f: Any, *vals: Any, arg: int = 0, epsilon: float = 1e-6) 
     Returns:
         An approximation of $f'_i(x_0, \ldots, x_{n-1})$
     """
-    raise NotImplementedError("Need to include this file from past assignment.")
+    x = vals[arg]
+    vals_l = list(vals)
+    vals_r = list(vals)
+    vals_l[arg] = x - epsilon
+    vals_r[arg] = x + epsilon
+    y_l = f(*vals_l)
+    y_r = f(*vals_r)
+    return (y_r - y_l) / (2.0 * epsilon)
 
 
 variable_count = 1
@@ -60,7 +67,20 @@ def topological_sort(variable: Variable) -> Iterable[Variable]:
     Returns:
         Non-constant Variables in topological order starting from the right.
     """
-    raise NotImplementedError("Need to include this file from past assignment.")
+    visited: Dict[int, bool] = {}
+    sorted_vars: List[Variable] = []
+
+    def visit(var: Variable) -> None:
+        if var.unique_id in visited:
+            return
+        visited[var.unique_id] = True
+        if not var.is_constant():
+            for parent in var.parents:
+                visit(parent)
+            sorted_vars.insert(0, var)
+
+    visit(variable)
+    return sorted_vars
 
 
 def backpropagate(variable: Variable, deriv: Any) -> None:
@@ -69,12 +89,25 @@ def backpropagate(variable: Variable, deriv: Any) -> None:
     compute derivatives for the leave nodes.
 
     Args:
-        variable: The right-most variable
+        variable: The right-most variables
         deriv  : Its derivative that we want to propagate backward to the leaves.
 
     No return. Should write to its results to the derivative values of each leaf through `accumulate_derivative`.
     """
-    raise NotImplementedError("Need to include this file from past assignment.")
+    sorted_vars = topological_sort(variable)
+    derivates = {var.unique_id: 0.0 for var in sorted_vars}
+    derivates[variable.unique_id] = deriv
+    for current_var in sorted_vars:
+        current_deriv = derivates[current_var.unique_id]
+        if current_var.is_leaf():
+            current_var.accumulate_derivative(current_deriv)
+        else:
+            for parent, partial_derivative in current_var.chain_rule(current_deriv):
+                if parent.is_constant():
+                    continue
+                if parent.unique_id not in derivates:   
+                    derivates[parent.unique_id] = 0.0
+                derivates[parent.unique_id] += partial_derivative
 
 
 @dataclass
