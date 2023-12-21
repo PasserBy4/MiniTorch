@@ -69,7 +69,7 @@ def _tensor_conv1d_cuda(
             input_val = 0.0
             weight_val = 0.0
             if reverse:
-                k_width_index -= (k_width - 1)
+                k_width_index = -k_width_index
             if out_width_index + k_width_index >= 0 and out_width_index + k_width_index < width:
                 input_pos = batch_index * s1[0] + in_channels_index * s1[1] + (out_width_index + k_width_index) * s1[2]
                 weight_pos = out_channel_index * s2[0] + in_channels_index * s2[1] + k_width_index * s2[2]
@@ -134,7 +134,7 @@ class Conv1dFunCuda(Function):
         return output
 
     @staticmethod
-    def backward(ctx: Context, grad_output: Tensor) -> Tuple(Tensor, Tensor):
+    def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
         input, weight = ctx.saved_values
         batch, in_channels, w = input.shape
         out_channels, in_channels, kw = weight.shape
