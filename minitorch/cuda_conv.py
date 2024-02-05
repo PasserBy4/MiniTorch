@@ -63,16 +63,18 @@ def _tensor_conv1d_cuda(
         out_width_index = out_index[2]
 
         in_channels_index = pos_x
-        k_width_index = pos_y
+        offset = pos_y
 
-        if in_channels_index < in_channels and k_width_index < k_width:
+        if in_channels_index < in_channels and offset < k_width:
             input_val = 0.0
             weight_val = 0.0
             if reverse:
-                k_width_index = -k_width_index
+                k_width_index = -offset
+            else:
+                k_width_index = offset
             if out_width_index + k_width_index >= 0 and out_width_index + k_width_index < width:
                 input_pos = batch_index * s1[0] + in_channels_index * s1[1] + (out_width_index + k_width_index) * s1[2]
-                weight_pos = out_channel_index * s2[0] + in_channels_index * s2[1] + k_width_index * s2[2]
+                weight_pos = out_channel_index * s2[0] + in_channels_index * s2[1] + offset * s2[2]
                 input_val = input[input_pos]
                 weight_val = weight[weight_pos]
             cache[in_channels_index, k_width_index] = input_val * weight_val
@@ -164,20 +166,20 @@ class Conv1dFunCuda(Function):
         )
         return grad_input, grad_weight
 
-class Conv2dFunCuda(Function):
-    @staticmethod
-    def forward(ctx: Context, input: Tensor, weight: Tensor) -> Tensor:
-        ctx.save_for_backward(input, weight)
-        batch, in_channels, h, w = input.shape
-        out_channels, in_channels2, kh, kw = weight.shape
-        assert in_channels == in_channels2
-        output = input.zeros((batch, out_channels, h, w))
-        threadsperblock = (4, 16, 16)
-        blockspergrid = output.size
-        tensor_conv2d_cuda[blockspergrid, threadsperblock](
-            *output.tuple(), output.size, *input.tuple(), *weight.tuple(), False
-        )
-        return output
+# class Conv2dFunCuda(Function):
+#     @staticmethod
+#     def forward(ctx: Context, input: Tensor, weight: Tensor) -> Tensor:
+#         ctx.save_for_backward(input, weight)
+#         batch, in_channels, h, w = input.shape
+#         out_channels, in_channels2, kh, kw = weight.shape
+#         assert in_channels == in_channels2
+#         output = input.zeros((batch, out_channels, h, w))
+#         threadsperblock = (4, 16, 16)
+#         blockspergrid = output.size
+#         tensor_conv2d_cuda[blockspergrid, threadsperblock](
+#             *output.tuple(), output.size, *input.tuple(), *weight.tuple(), False
+#         )
+#         return output
 
 
 
